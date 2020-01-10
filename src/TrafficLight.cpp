@@ -1,6 +1,8 @@
 #include <iostream>
 #include <random>
 #include <future>
+#include <thread>
+#include <mutex>
 #include "TrafficLight.h"
 
 /* Implementation of class "MessageQueue" */
@@ -13,14 +15,17 @@ T MessageQueue<T>::receive()
     // to wait for and receive new messages and pull them from the queue using move semantics. 
     // The received object should then be returned by the receive function. 
 }
-
+*/
 template <typename T>
 void MessageQueue<T>::send(T &&msg)
 {
     // FP.4a : The method send should use the mechanisms std::lock_guard<std::mutex> 
     // as well as _condition.notify_one() to add a new message to the queue and afterwards send a notification.
+    std::lock_guard<std::mutex> lck(_mutex);
+    _queue.emplace_back(msg);
+    _condition.notify_one();
 }
-*/
+
 
 /* Implementation of class "TrafficLight" */
 
@@ -45,7 +50,7 @@ TrafficLightPhase TrafficLight::getCurrentPhase()
 void TrafficLight::simulate()
 {
     // FP.2b : Finally, the private method „cycleThroughPhases“ should be started in a thread when the public method „simulate“ is called. To do this, use the thread queue in the base class. 
-    //threads.emplace_back(std::async(&TrafficLight::cycleThroughPhases));
+    //threads.emplace_back(std::async(&TrafficLight::cycleThroughPhases, this));
 }
 
 // virtual function which is executed in a thread
@@ -57,28 +62,27 @@ void TrafficLight::cycleThroughPhases()
     // Also, the while-loop should use std::this_thread::sleep_for to wait 1ms between two cycles. 
 
     // Random value between 4 and 6 seconds
-    float cycleDuration = (rand() / (float)RAND_MAX) * 2 + 4;
+    float cycleDuration = (rand() / (float)RAND_MAX) * 2000 + 4000;
     std::cout << "Cycle duration: " << cycleDuration << std::endl;
 
     // Get start time
-    auto start = std::chrono::high_resolution_clock::now();
+    auto lastUpdate = std::chrono::system_clock::now();
     while (true) 
     {
         // Wait 1ms
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
         
-        // Get end time
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<float> elapsed = end - start;
+        // compute time difference to stop watch
+        long timeSinceLastUpdate = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - lastUpdate).count();
 
         // std::cout << "Elapsed: " << elapsed << std::endl;
 
-        if (std::chrono::duration_cast<std::chrono::seconds>(elapsed).count() >= cycleDuration) {
+        if (timeSinceLastUpdate >= cycleDuration) {
             // Toggle light color
-            if (_currentPhase == TrafficLightPhase::red) _currentPhase = TrafficLightPhase::green;
-            else if (_currentPhase == TrafficLightPhase::green) _currentPhase = TrafficLightPhase::red;
+            _currentPhase = (_currentPhase == TrafficLightPhase::red) ? TrafficLightPhase::green : TrafficLightPhase::red;
 
-            // TODO: update method to message queue using move semantics
+            // TODO: Update method to message queue using move semantics
+            _messages.send(std::move(_currentPhase));
             break;
         }
     }
