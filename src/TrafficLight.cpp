@@ -50,7 +50,7 @@ void TrafficLight::waitForGreen()
     while(true)
     {
          if (_messages.receive() == TrafficLightPhase::green)
-            break;
+            return;
     }
 }
 
@@ -73,30 +73,44 @@ void TrafficLight::cycleThroughPhases()
     // to the message queue using move semantics. The cycle duration should be a random value between 4 and 6 seconds. 
     // Also, the while-loop should use std::this_thread::sleep_for to wait 1ms between two cycles. 
 
-    // Get start time
-    auto lastUpdate = std::chrono::system_clock::now();
-
-    // Random value between 4 and 6 seconds
-    float cycleDuration = (rand() / (float)RAND_MAX) * 2000 + 4000;
+    // Start stopwatch
+    std::chrono::system_clock::time_point lastUpdate;
+    float cycleDuration;
+    resetStopwatch(lastUpdate, cycleDuration);
 
     while (true) 
     {
-        // Wait 1ms
+        // Wait 1ms to reduce stress on CPU
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
         
         // compute time difference to stop watch
-        long timeSinceLastUpdate = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - lastUpdate).count();
+        long timeSinceLastUpdate = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now() 
+            - lastUpdate).count();
 
         if (timeSinceLastUpdate >= cycleDuration) {
 
             // Toggle light color
-            _currentPhase = (_currentPhase == TrafficLightPhase::red) ? TrafficLightPhase::green : TrafficLightPhase::red;
+            _currentPhase = (_currentPhase == TrafficLightPhase::red) ? 
+                TrafficLightPhase::green : 
+                TrafficLightPhase::red;
 
             // Update method to message queue using move semantics
             _messages.send(std::move(_currentPhase));
 
-            lastUpdate = std::chrono::system_clock::now();
-            cycleDuration = (rand() / (float)RAND_MAX) * 2000 + 4000;
+            // Reset timer
+            resetStopwatch(lastUpdate, cycleDuration);
         }
     }
+}
+
+void TrafficLight::resetStopwatch(std::chrono::system_clock::time_point &lastUpdate, 
+    float &cycleDuration) {
+
+    lastUpdate = std::chrono::system_clock::now();
+    cycleDuration = getNewCycleDuration();
+}
+
+float TrafficLight::getNewCycleDuration() {
+    return (rand() / (float)RAND_MAX) * 2000 + 4000;
 }
